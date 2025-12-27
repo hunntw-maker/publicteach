@@ -5,11 +5,11 @@ export type EngagementLevel = '高' | '中' | '低';
 
 export interface ObservationLog {
   id: string;
-  timestamp: string;
+  timestamp: string;      // 絕對時間 (如 14:30:05)
+  relativeTime: string;   // 相對時間碼 (如 T+05:12)
   type: 'MODE_CHANGE' | 'ACTION' | 'ENGAGEMENT' | 'NOTE';
   label: string;
   details?: string;
-  duration?: number;
 }
 
 export interface SessionStats {
