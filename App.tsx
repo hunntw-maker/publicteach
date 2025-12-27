@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SUBJECTS, StartIcon, StopIcon, LogoIcon } from './constants';
-import { TeachingMode, TeachingAction, EngagementLevel, ObservationLog, SessionStats } from './types';
+import { TeachingMode, TeachingAction, EngagementLevel, ObservationLog } from './types';
 
 // Components
 const ModeCard: React.FC<{
@@ -121,8 +121,8 @@ const App: React.FC = () => {
     const now = new Date();
     const wallTimestamp = now.toLocaleTimeString('zh-TW', { hour12: false });
     
-    // Calculate elapsed time code if session is active
-    let durationString = "";
+    // Calculate elapsed time code relative to session start
+    let durationString = "[T+0:00]";
     if (sessionStartTime) {
       const elapsed = Math.floor((now.getTime() - sessionStartTime) / 1000);
       const mins = Math.floor(elapsed / 60);
@@ -134,7 +134,7 @@ const App: React.FC = () => {
       id: Math.random().toString(36).substr(2, 9),
       timestamp: wallTimestamp,
       type,
-      label: durationString ? `${durationString} ${label}` : label,
+      label: `${durationString} ${label}`,
       details
     };
     setLogs(prev => [newLog, ...prev]);
@@ -144,16 +144,16 @@ const App: React.FC = () => {
 
   const handleToggleSession = () => {
     if (!isSessionActive) {
-      const now = Date.now();
-      setSessionStartTime(now);
+      const startTime = Date.now();
+      setSessionStartTime(startTime);
       setIsSessionActive(true);
-      // We pass the start time directly because the state won't update in time for addLog inside this closure
-      const wallTimestamp = new Date(now).toLocaleTimeString('zh-TW', { hour12: false });
+      
+      const wallTimestamp = new Date(startTime).toLocaleTimeString('zh-TW', { hour12: false });
       const newLog: ObservationLog = {
         id: Math.random().toString(36).substr(2, 9),
         timestamp: wallTimestamp,
         type: 'ACTION',
-        label: `開始觀課 (科目：${selectedSubject})`,
+        label: `[T+0:00] 開始觀課 (科目：${selectedSubject})`,
       };
       setLogs(prev => [newLog, ...prev]);
     } else {
@@ -195,7 +195,6 @@ const App: React.FC = () => {
   };
 
   const totalTimeInSeconds = useMemo(() => {
-    // Explicitly type acc and curr as numbers to avoid 'unknown' type errors during reduce
     return Object.values(modeTimes).reduce((acc: number, curr: number) => acc + curr, 0);
   }, [modeTimes]);
 
@@ -204,48 +203,51 @@ const App: React.FC = () => {
     const totalMins = Math.floor(totalTimeInSeconds / 60);
     const totalSecs = totalTimeInSeconds % 60;
 
-    let report = `================================================\n`;
-    report += `          Chronos 數位觀課報告 - ${selectedSubject}\n`;
-    report += `================================================\n`;
-    report += `產出時間: ${nowStr}\n`;
-    report += `總教學時數 (累計): ${totalMins}分${totalSecs}秒\n`;
-    report += `------------------------------------------------\n\n`;
+    let report = `==========================================================\n`;
+    report += `          CHRONOS 數位觀課專業報告 - ${selectedSubject}\n`;
+    report += `==========================================================\n`;
+    report += `報表產出日期 : ${nowStr}\n`;
+    report += `課程開始時間 : ${sessionStartTime ? new Date(sessionStartTime).toLocaleTimeString('zh-TW', { hour12: false }) : 'N/A'}\n`;
+    report += `累計有效教學時數 : ${totalMins} 分 ${totalSecs} 秒\n`;
+    report += `----------------------------------------------------------\n\n`;
     
-    report += `[ 教學模式統計 ]\n`;
+    report += `[ 教學模式分佈統計 ]\n`;
     (Object.keys(modeTimes) as TeachingMode[]).forEach(m => {
       const mins = Math.floor(modeTimes[m] / 60);
       const secs = modeTimes[m] % 60;
       const percent = totalTimeInSeconds > 0 ? ((modeTimes[m] / totalTimeInSeconds) * 100).toFixed(1) : 0;
-      report += `- ${m.padEnd(6, ' ')}: ${mins.toString().padStart(2, '0')}分${secs.toString().padStart(2, '0')}秒 (${percent}%)\n`;
+      report += `- ${m.padEnd(8, ' ')} : ${mins.toString().padStart(2, '0')} 分 ${secs.toString().padStart(2, '0')} 秒 (${percent}%)\n`;
     });
     report += `\n`;
 
-    report += `[ 教學行為次數 ]\n`;
+    report += `[ 關鍵教學行為計次 ]\n`;
     (Object.keys(actionCounts) as TeachingAction[]).forEach(a => {
-      report += `- ${a.padEnd(6, ' ')}: ${actionCounts[a]} 次\n`;
+      report += `- ${a.padEnd(8, ' ')} : ${actionCounts[a]} 次\n`;
     });
     report += `\n`;
 
-    report += `[ 完整歷程記錄 (包含時間碼) ]\n`;
-    report += `------------------------------------------------\n`;
-    report += `時間代碼 | 絕對時間 | 紀錄內容\n`;
-    report += `------------------------------------------------\n`;
+    report += `[ 完整觀課歷程流 ] (包含絕對與相對時間碼)\n`;
+    report += `----------------------------------------------------------\n`;
+    report += `絕對時間 | 相對時碼 | 觀課事件描述\n`;
+    report += `----------------------------------------------------------\n`;
     
-    // Sort logs chronologically (earliest first) for the final report
     const sortedLogs = [...logs].reverse();
     sortedLogs.forEach(l => {
-      // The label already contains the [T+...] part from addLog
-      report += `${l.timestamp.padEnd(8, ' ')} | ${l.label}${l.details ? ' - ' + l.details : ''}\n`;
+      // label includes [T+M:SS]
+      const parts = l.label.split(' ');
+      const timeCode = parts[0];
+      const content = parts.slice(1).join(' ');
+      report += `${l.timestamp.padEnd(8, ' ')} | ${timeCode.padEnd(8, ' ')} | ${content}${l.details ? ' - ' + l.details : ''}\n`;
     });
-    report += `\n------------------------------------------------\n`;
-    report += `END OF REPORT\n`;
+    report += `\n----------------------------------------------------------\n`;
+    report += `報告結束 (CHRONOS DIGITAL OBSERVATION DASHBOARD)\n`;
     
     return report;
   };
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(generateReport());
-    alert('觀課報告已格式化並複製到剪貼簿。');
+    alert('專業觀課報告（含完整時間碼）已複製到剪貼簿。');
   };
 
   const downloadReport = () => {
@@ -254,7 +256,7 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Chronos_觀課報告_${selectedSubject}_${new Date().toISOString().slice(0, 10)}.txt`;
+    link.download = `Chronos_Report_${selectedSubject}_${new Date().toISOString().slice(0, 10)}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -311,7 +313,7 @@ const App: React.FC = () => {
              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-widest px-1">即時紀錄流 (Log Stream)</h2>
              <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-y-auto max-h-[300px] md:max-h-none flex-grow scrollbar-hide">
                 {logs.length === 0 ? (
-                  <div className="p-8 text-center text-slate-600 text-sm italic">尚無紀錄...</div>
+                  <div className="p-8 text-center text-slate-600 text-sm italic">尚未開始記錄...</div>
                 ) : (
                   <div className="flex flex-col divide-y divide-slate-800">
                     {logs.map(log => (
@@ -363,7 +365,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
                 <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-800 rounded-2xl opacity-40">
-                    <span className="text-xs text-slate-600">PREVIEW DATA VISUALIZATION</span>
+                    <span className="text-xs text-slate-600 uppercase">Live Data Visualization</span>
                 </div>
              </div>
           </div>
